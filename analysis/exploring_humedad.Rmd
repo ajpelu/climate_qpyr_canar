@@ -1,0 +1,272 @@
+---
+title: "Humedad del suelo"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE)
+```
+
+```{r pkg}
+library("tidyverse")
+library("here")
+library("patchwork")
+```
+
+# Prepare data 
+
+- remove sensores con status elevation = 0 
+- filter cota 1750 
+```{r read_data}
+sensors <- read_csv(here::here("data/raw/sensors.csv")) %>% 
+  filter(elevation == 1750)
+
+d <- read_csv(here::here("data/raw/readings.csv")) %>% 
+  filter(id_sensor %in% sensors$id_sensor)
+
+humedad <- d %>% 
+  dplyr::filter(str_detect(tag, "Humedad")) %>% 
+  dplyr::select(id_sensor, dat, time_dat, tag, positionsensor, tvariable) %>% 
+  inner_join(sensors) %>% 
+  dplyr::select(-tvariable, -elevation, -c(stationid:geo)) %>% 
+  rename(pos = positionsensor) %>% as.data.frame()
+
+```
+
+
+# Exploratory 
+
+- Valores diarios agregados para todas las replicas 
+
+```{r}
+h_dialy <- humedad %>% 
+  group_by(date=lubridate::floor_date(time_dat, "day"), 
+           id_sensor, tag, pos, location, replica) %>% 
+  summarise(daily_avg = mean(dat)) %>% 
+  filter(date > as.POSIXct("2017-12-31")) %>% 
+  mutate(date = as.Date(date, format="%Y-%m-%d"))
+           
+colores <- c("CLARO" = "#CC7722", "ROBLEDAL" = "#0B6623")
+```
+
+```{r}
+ggplot(h_dialy, aes(x=date, y = daily_avg, colour = location)) + 
+  geom_point(size=.5) + scale_color_manual(values=colores) + 
+  facet_wrap(~tag) + theme_minimal()
+```
+
+- Valores diarios agregados por habitat (average de las replicas)
+
+```{r}
+h_dialy_avg <- h_dialy %>% 
+  group_by(location, tag, date) %>% 
+  summarise(daily_avg = mean(daily_avg))
+
+
+ggplot(h_dialy_avg, aes(x=date, y = daily_avg, colour = location)) + 
+  geom_point(size=.5) + scale_color_manual(values=colores) + 
+  facet_wrap(~tag) + theme_minimal()
+
+```
+
+- Filtrar por fechas (solamente desde abril hasta octubre)
+
+```{r}
+
+h_dialy_avg_spring <- h_dialy_avg %>% 
+  mutate(m = lubridate::month(date)) %>% 
+  filter(m %in% c(4:9))
+
+ggplot(h_dialy_avg_spring, aes(x=date, y = daily_avg, colour = location)) + 
+  geom_point(size=.5) + scale_color_manual(values=colores) + 
+  facet_wrap(~tag) + theme_minimal() +
+  scale_x_date(date_breaks = "3 months", date_labels = "%b", 
+               sec.axis = dup_axis(labels = scales::date_format("%Y"), 
+                                   breaks = scales::date_breaks("year")))
+```
+
+- 2019 
+```{r}
+h_dialy_avg_spring %>% 
+  filter(date > as.POSIXct("2018-12-31") &
+           date < as.POSIXct("2019-12-31")) %>% 
+  ggplot(aes(x=date, y = daily_avg, colour = location)) + 
+  geom_point(size=.5) + scale_color_manual(values=colores) + 
+  facet_wrap(~tag) + theme_minimal() +
+  scale_x_date(date_breaks = "1 months", date_labels = "%b") +
+  geom_line()
+```
+
+- 2018 
+```{r}
+h_dialy_avg_spring %>% 
+  filter(date > as.POSIXct("2017-12-31") &
+           date < as.POSIXct("2018-12-31")) %>% 
+  ggplot(aes(x=date, y = daily_avg, colour = location)) + 
+  geom_point(size=.5) + scale_color_manual(values=colores) + 
+  facet_wrap(~tag) + theme_minimal() +
+  scale_x_date(date_breaks = "1 months", date_labels = "%b") +
+  geom_line()
+```
+
+
+## Datos Humedad suelo 
+
+- Filtramos HumedadSuelo30profundidad 
+
+```{r}
+
+soil <- h_dialy %>% filter(tag == "HumedadSuelo30profundidad") 
+
+ggplot(soil, aes(x=date, y = daily_avg, colour = location)) + 
+  geom_point(size=.5) + scale_color_manual(values=colores) + theme_minimal()
+
+```
+
+- Quitamos outliers (values > 50; values < 2)
+
+```{r}
+soil <- h_dialy %>% filter(tag == "HumedadSuelo30profundidad") %>% 
+  filter(daily_avg < 50 & daily_avg > 2) 
+
+ggplot(soil, aes(x=date, y = daily_avg, colour = location)) + 
+  geom_point(size=.5) + scale_color_manual(values=colores) + theme_minimal()
+```
+
+- Valores agregados por replica
+
+```{r}
+soil_avg <- soil %>% 
+  group_by(date, location) %>% summarise(daily_avg = mean(daily_avg)) 
+```
+
+
+- Valores de primavera y verano 
+```{r}
+soil_pv <- soil %>% 
+  filter(lubridate::month(date) %in% c(3:9)) %>%
+  mutate(jday = lubridate::yday(date)) %>% as.data.frame()
+
+ggplot(soil_pv, aes(x=date, y = daily_avg, colour = location)) + 
+  geom_point(size=.5) + scale_color_manual(values=colores) + theme_minimal()
+```
+
+
+- Agrupamos por replica
+
+```{r}
+# Ojo ver que pasa los días 170 y 164 en CLARO
+# Parece que hay valores outliers en alguna replica 
+soil_pv %>% filter(location == "CLARO") %>% 
+  filter(jday %in% c(164, 170))
+
+# Efectivamente valores anómalos en la R1 (en comparación con las otras réplicas). Los elimino 
+soil_pv_avg <- soil_pv %>% 
+  filter(!(location =="CLARO" & jday %in% c(164, 170) & replica == "R1")) %>% 
+           group_by(date, jday, location) %>% summarise(daily_avg = mean(daily_avg)) 
+
+
+ggplot(soil_pv_avg, aes(x=date, y = daily_avg, colour = location)) + 
+  geom_point(size=.5) + scale_color_manual(values=colores) + theme_minimal()
+```
+
+- Creamos perfil de esos meses 
+
+```{r}
+profile <- soil_pv_avg %>% 
+  group_by(jday, location) %>% 
+  summarise(mean = mean(daily_avg), 
+            sd = sd(daily_avg), 
+            se = sd/sqrt(length(daily_avg))
+            ) %>% 
+  filter(jday < 244) %>% 
+  # ojo esta fecha es simplemente para visualizacion
+  mutate(date = as.Date("2018-01-01") + jday -1)
+
+ggplot(profile, aes(x=date, y = mean, colour = location, fill=location)) + 
+  # geom_point(size=.5) + 
+  geom_line() + 
+  geom_ribbon(aes(ymin=mean-se, ymax=mean+se), colour=NA, alpha =.4) + 
+   # geom_errorbar(aes(ymin=mean-se, ymax=mean+se))
+  scale_color_manual(values=colores) +
+  scale_fill_manual(values=colores) + 
+  theme_minimal() +
+  scale_x_date(date_breaks = "1 month", date_labels = "%b") + xlab("") + ylab("Humedad Suelo (-30 cm) (%)")
+
+
+
+profile1819 <- soil_pv_avg %>% 
+  filter(lubridate::year(date) %in% c(2018:2019)) %>% 
+  group_by(jday, location) %>% 
+  summarise(mean = mean(daily_avg), 
+            sd = sd(daily_avg), 
+            se = sd/sqrt(length(daily_avg))
+            ) %>% 
+  filter(jday < 244) %>% 
+  # ojo esta fecha es simplemente para visualizacion
+  mutate(date = as.Date("2018-01-01") + jday -1)
+
+
+ggplot(profile1819, aes(x=date, y = mean, colour = location, fill=location)) + 
+  # geom_point(size=.5) + 
+  geom_line() + 
+  geom_ribbon(aes(ymin=mean-se, ymax=mean+se), colour=NA, alpha =.4) + 
+   # geom_errorbar(aes(ymin=mean-se, ymax=mean+se))
+  scale_color_manual(values=colores) +
+  scale_fill_manual(values=colores) + 
+  theme_minimal() +
+  scale_x_date(date_breaks = "1 month", date_labels = "%b") + xlab("") + ylab("Humedad Suelo (-30 cm) (%)")
+
+```
+
+
+### Datos de Precipitación para esos tres años (2018 a 2020)
+
+- Datos de prec solo hasta enero de 2020 
+```{r}
+dfprec <- read_csv(here::here("data/raw/psn07_prec.csv")) %>% 
+  mutate(date = as.Date(date, format = "%Y-%m-%d"))
+
+prec <- dfprec %>% filter(lubridate::year(date) %in% c(2018:2019)) 
+
+p <- ggplot(prec, aes(x=date, y = value)) + 
+  geom_density(stat = "identity", fill="blue", colour = NA) + 
+  #geom_bar(stat = "identity", colour=NA, fill= "blue") + 
+  theme_bw() + 
+  theme(
+    panel.grid.minor =element_blank()
+  ) + 
+  ylab("Precipitación (mm)") + xlab("") +
+  scale_x_date(position = "top") 
+```
+
+
+
+- combinar 
+```{r}
+s <- soil_avg %>% 
+  filter(lubridate::year(date) %in% c(2018:2019)) %>% 
+  ggplot(aes(x=date, y = daily_avg, colour = location)) + 
+  # geom_point(size=.5) + 
+  scale_color_manual(values=colores) + 
+  geom_line() + 
+  theme_bw() +
+  theme(
+    panel.grid.minor =element_blank(), 
+    legend.position = "bottom", 
+    legend.title = element_blank()
+  ) + 
+  ylab("Humedad del suelo (%)") + xlab("")
+
+
+plot_conjunto <- p/s 
+```
+
+
+```{r}
+plot_conjunto
+```
+
+
