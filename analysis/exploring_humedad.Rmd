@@ -185,15 +185,24 @@ profile <- soil_pv_avg %>%
   # ojo esta fecha es simplemente para visualizacion
   mutate(date = as.Date("2018-01-01") + jday -1)
 
-ggplot(profile, aes(x=date, y = mean, colour = location, fill=location)) + 
+p_profile <- ggplot(profile, aes(x=date, y = mean, colour = location, fill=location)) + 
   # geom_point(size=.5) + 
   geom_line() + 
   geom_ribbon(aes(ymin=mean-se, ymax=mean+se), colour=NA, alpha =.4) + 
    # geom_errorbar(aes(ymin=mean-se, ymax=mean+se))
-  scale_color_manual(values=colores) +
-  scale_fill_manual(values=colores) + 
-  theme_minimal() +
-  scale_x_date(date_breaks = "1 month", date_labels = "%b") + xlab("") + ylab("Humedad Suelo (-30 cm) (%)")
+  scale_color_manual(values=colores, labels = c("Open","Forest")) +
+  scale_fill_manual(values=colores, labels = c("Open","Forest")) +  
+  theme_bw() + 
+  theme(legend.position = "bottom",
+        legend.title = element_blank(), 
+        panel.grid = element_blank()) +
+  scale_x_date(date_breaks = "1 month", date_labels = "%b") + 
+  xlab("") + 
+  ylab("Contenido Volumétrico Agua (-30 cm) (%)")
+
+ggsave(plot = p_profile,
+       filename = here::here("figs/profile_humedad_verano.jpg"), 
+       height = 5, width = 5)
 
 
 
@@ -232,14 +241,18 @@ dfprec <- read_csv(here::here("data/raw/psn07_prec.csv")) %>%
 prec <- dfprec %>% filter(lubridate::year(date) %in% c(2018:2019)) 
 
 p <- ggplot(prec, aes(x=date, y = value)) + 
-  geom_density(stat = "identity", fill="blue", colour = NA) + 
-  #geom_bar(stat = "identity", colour=NA, fill= "blue") + 
+  # geom_density(stat = "identity", fill="blue", colour = "blue", 
+  #              outline.type = "upper", 
+  #              size = .8) + 
+  geom_bar(stat = "identity", colour=NA, fill= "blue", width = 3) + 
   theme_bw() + 
   theme(
-    panel.grid.minor =element_blank()
+    panel.grid.minor =element_blank(),
+    axis.title.y =  element_text(size = 8)
   ) + 
   ylab("Precipitación (mm)") + xlab("") +
   scale_x_date(position = "top") 
+
 ```
 
 
@@ -250,23 +263,28 @@ s <- soil_avg %>%
   filter(lubridate::year(date) %in% c(2018:2019)) %>% 
   ggplot(aes(x=date, y = daily_avg, colour = location)) + 
   # geom_point(size=.5) + 
-  scale_color_manual(values=colores) + 
+  scale_color_manual(values=colores,
+                     labels = c("Open","Forest")) + 
   geom_line() + 
   theme_bw() +
   theme(
     panel.grid.minor =element_blank(), 
     legend.position = "bottom", 
-    legend.title = element_blank()
+    legend.title = element_blank(),
+    axis.title.y =  element_text(size = 8)
   ) + 
-  ylab("Humedad del suelo (%)") + xlab("")
+  ylab("Contenido Volumétrico Agua (%)") + xlab("")
 
 
 plot_conjunto <- p/s 
+plot_conjunto
 ```
 
 
 ```{r}
-plot_conjunto
+ggsave(plot = plot_conjunto,
+       filename = here::here("figs/profile_humedad.jpg"),
+ height = 5, width = 6)
 ```
 
 

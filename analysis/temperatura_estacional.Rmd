@@ -1,0 +1,257 @@
+---
+title: "rangos_temperatura"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE)
+```
+
+```{r pkg}
+library("tidyverse")
+library("here")
+library("patchwork")
+# devtools::install_github("zeehio/facetscales")
+library("scales")
+library("facetscales")
+library("egg")
+```
+
+# Datos de la estacion 
+ 
+```{r}
+dftemp <- read_csv(here::here("data/raw/psn07_temp_air.csv")) %>% 
+  mutate(date = as.Date(time, format = "%Y-%m-%d")) %>% 
+  dplyr::select(-variable_id) %>% 
+  mutate(variable = case_when(variable == "temp_air" ~ "TemperaturaAire_Estacion"))
+
+temp_psn <- dftemp %>% 
+  filter(lubridate::year(date) %in% c(2018:2019)) %>% 
+  mutate(location = "0_ESTACION", 
+         replica = "R1")
+```
+
+
+# Datos de sensores 
+- remove sensores con status elevation = 0 
+- filter cota 1750 
+```{r read_data}
+sensors <- read_csv(here::here("data/raw/sensors.csv")) %>% 
+  filter(elevation == 1750)
+
+s <- read_csv(here::here("data/raw/readings.csv")) %>% 
+  filter(id_sensor %in% sensors$id_sensor) %>% 
+  dplyr::filter(str_detect(tag, "Temperatura")) %>% 
+  dplyr::select(id_sensor, dat, time_dat, tag, positionsensor, tvariable) %>% 
+  inner_join(sensors) %>% 
+  dplyr::select(-tvariable, -elevation, -c(stationid:geo)) %>% 
+  rename(pos = positionsensor) %>% 
+  mutate(date = as.Date(time_dat, format = "%Y-%m-%d")) %>% 
+  dplyr::select(time = time_dat, value = dat, variable = tag, date, 
+                location, replica)
+```
+
+
+
+```{r}
+d <- bind_rows(s, temp_psn) %>% 
+  mutate(variableF = recode(variable, 
+    "TemperaturaAire45altura" = "Aire",
+    "TemperaturaAire_Estacion" = "Aire",
+    "TemperaturaSueloSuperficieCubierto" = "Suelo cubierto",
+    "TemperaturaSueloSuperficieDespejado" = "Superficie",
+    "TemperaturaSuelo30profundidad" = "Suelo -30 cm"))
+
+# Creamos limites de tiempo para filtrar los datos 
+break_verano <- as.POSIXct("2018-06-21")
+break_primavera <- as.POSIXct("2018-03-20")
+break_otono <- as.POSIXct("2018-09-21")
+break_invierno <- as.POSIXct("2018-12-21")
+
+# Creamos diferentes subsets de datos 
+verano <- d %>% filter(date > break_verano & date < break_otono) %>% 
+  mutate(season = "verano")
+primavera <- d %>% filter(date > break_primavera & date < break_verano) %>% 
+  mutate(season = "primavera")
+otono <- d %>% filter(date > break_otono & date < break_invierno) %>% 
+  mutate(season = "otoño")
+invierno <- d %>% filter(date > as.POSIXct("2017-12-21") & date < break_primavera) %>% 
+  mutate(season = "invierno")
+
+
+# dataframe con datos de invierno y verano 
+dfcompara <- bind_rows(verano, invierno)
+
+# Plot 
+colores <- c("CLARO" = "#CC7722", "ROBLEDAL" = "#0B6623", "0_ESTACION" = "black")
+
+# Para especificar las escalas 
+scales_y <- list(
+  invierno = scale_y_continuous(limits = c(-15,20)),
+  verano = scale_y_continuous()
+)
+
+
+
+vi <- ggplot(dfcompara, aes(x = variableF, y = value, color=location)) +
+  geom_boxplot(outlier.shape = NA, 
+               position = position_dodge2(preserve = "single")) +
+  scale_color_manual(values=colores, 
+                     labels = c("Estación Meteorológica",
+                                "Open",
+                                "Forest")) +
+  theme_bw() +  ylab("Temperatura (ºC)") + xlab("") +
+  facet_grid_sc(rows = vars(season), scales = list(y=scales_y)) +
+  theme(legend.position = "bottom",
+        legend.title = element_blank(), 
+        panel.grid = element_blank(), 
+        strip.background = element_blank()) +
+  scale_x_discrete(limits = c("Aire", "Suelo cubierto",
+                                 "Superficie","Suelo -30 cm")) 
+
+# add labels 
+vi <- tag_facet(vi, 
+          open= "", close = "", 
+          tag_pool = c("Invierno", "Verano")) 
+
+vi
+```
+
+
+```{r}
+ggsave(plot = vi,
+       filename = here::here("figs/temperatura_ver_inv.jpg"), 
+       height = 5, width = 6)
+```
+
+ 
+
+# Promedio de las medias, mínimas, maximas y valor máximo/min de la serie 
+
+```{r}
+temp_diarias <- verano %>% 
+  group_by(variable, variableF, date, location) %>% 
+  summarise(tmean = mean(value),
+            tmin = min(value), 
+            tmax = max(value)) 
+
+avg_temp_diarias <- temp_diarias %>% 
+  group_by(variable, variableF, location) %>% 
+  summarise(avg_tmean = mean(tmean),
+            avg_tmin = mean(tmin), 
+            avg_tmax = mean(tmax),
+            tmin = min(tmin),
+            tmax = max(tmax)) 
+  
+pos <- position_dodge2(preserve = "single", width = 0.9)
+
+
+po <- ggplot(avg_temp_diarias, 
+       aes(x = variableF, y = avg_tmean, color=location)) + 
+  geom_crossbar(
+    aes(ymax = avg_tmax, ymin = avg_tmin, fill=location), 
+    position = pos, size = 0.1) +
+  geom_linerange(
+    aes(ymax = tmax, ymin = tmin), 
+    position = pos) + 
+  geom_point(
+    aes(y = avg_tmean),
+    position = pos,
+    fill="white", shape = 21, size =4) +
+  scale_color_manual(values=colores, 
+                     labels = c("Estación Meteorológica","Open", "Forest"), 
+                     guide = guide_legend()) + 
+  scale_fill_manual(values=colores, 
+                    labels = c("Estación Meteorológica","Open", "Forest")) +
+  theme_bw() + 
+  ylab("Temperatura (ºC)") + 
+  xlab("") + 
+  theme(legend.position = "bottom",
+        legend.title = element_blank(), 
+        panel.grid = element_blank(), 
+        strip.background = element_blank()) +
+  scale_x_discrete(limits = 
+                     c("Aire", "Suelo cubierto",
+                       "Superficie","Suelo -30 cm")) +
+  geom_text(aes(y= tmax, label=tmax), 
+               position = pos, vjust = -1, size = 3) +
+  geom_text(aes(y= tmin, label=tmin), 
+               position = pos, vjust = 1.5, size = 3) + 
+  guides(colour=FALSE)
+  
+po
+
+```
+
+```{r}
+ggsave(plot = po,
+       filename = here::here("figs/temperatura_verano.jpg"), 
+       height = 5, width = 6)
+```
+
+
+
+
+
+```{r, echo=FALSE, eval=FALSE}
+
+verano_mmm <- verano %>% 
+  group_by(date, variable, location, variableF) %>% 
+  summarise(
+    mean = mean(value), 
+    min = min(value),
+    max = max(value)
+  )
+
+colores <- c("CLARO" = "#CC7722", "ROBLEDAL" = "#0B6623", "0_ESTACION" = "black")
+
+
+ggplot(verano_mmm, 
+       aes(x=date, y = mean, colour = location, fill = location)) +
+  geom_line() + 
+  geom_ribbon(aes(ymin=min, ymax=max), colour=NA, alpha =.4) + 
+  facet_wrap(~variableF, ncol=1, scales = "free_y") +
+  scale_color_manual(values=colores) +
+  scale_fill_manual(values=colores)
+
+
+ggplot(verano_mmm, 
+       aes(x=date, colour = location, fill = location)) +
+  geom_line(aes(y=mean)) +
+  geom_line(aes(y=min), linetype = "dashed") + 
+  geom_line(aes(y=max), linetype = "dashed") + 
+  #geom_ribbon(aes(ymin=min, ymax=max), colour=NA, alpha =.4) + 
+  facet_wrap(~variableF, ncol=1, scales = "free_y") +
+  #facet_grid(variableF~location, scales = "free_y") +
+  scale_color_manual(values=colores) +
+  scale_fill_manual(values=colores) + 
+  ylab("temp") +
+  theme_bw()
+
+
+
+ggplot(verano_mmm, 
+       aes(x=date, colour = location, fill = location)) +
+  geom_line(aes(y=mean)) +
+  geom_line(aes(y=min), linetype = "dashed") + 
+  geom_line(aes(y=max), linetype = "dashed") + 
+  #geom_ribbon(aes(ymin=min, ymax=max), colour=NA, alpha =.4) + 
+  # facet_wrap(~variableF, ncol=1, scales = "free_y") +
+  facet_grid(variableF~location, scales = "free_y") +
+  scale_color_manual(values=colores) +
+  scale_fill_manual(values=colores) + 
+  ylab("temp") +
+  theme_bw()
+```
+
+
+
+
+
+
+
+
+
+

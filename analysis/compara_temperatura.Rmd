@@ -13,6 +13,7 @@ knitr::opts_chunk$set(echo = TRUE, message = FALSE)
 library("tidyverse")
 library("here")
 library("patchwork")
+library("egg")
 ```
 
 # Datos de la estacion 
@@ -121,9 +122,9 @@ ptso <- tso %>% ggplot(aes(x=time, y = value, colour = location)) +
 
 library(patchwork)
 pta/ptso
+```
 
-
-
+```{r}
 
 df10NA <- df10 %>% 
   filter(variable == "TemperaturaSueloSuperficieCubierto") %>% 
@@ -157,25 +158,33 @@ l <- expand.grid(time = as.POSIXct("2018-07-19 02:00:00", format="%Y-%m-%d %H:%M
                  location = "ESTACION")
 
 
-v %>% ggplot(aes(x=time, y = value, colour = location)) + 
-  geom_point() + geom_line() + 
-  facet_wrap(~variableF, ncol=1, strip.position = "right", scales = "free_y") + 
+perfil_temp <- v %>% ggplot(aes(x=time, y = value, colour = location)) + 
+  geom_point(size=1) + geom_line() + 
+  facet_wrap(~variableF, ncol=1, 
+             strip.position = "right", scales = "free_y") + 
   theme_bw() +
-  ylab("Temperatura") + xlab("") + 
+  ylab("Temperatura (ºC)") + xlab("") + 
   theme(legend.position = "bottom",
         legend.title = element_blank(), 
-        panel.grid.minor = element_blank(), 
+        panel.grid = element_blank(), 
         strip.background = element_blank(), 
         strip.text = element_blank()) + 
   scale_x_datetime(breaks = scales::date_breaks("2 hours"),
-                   date_labels = "%H:%M") + 
-  scale_color_manual(values=colores) +
+                   date_labels = "%H") + 
+  scale_color_manual(values=colores, 
+                     labels = c("ESTACION"="Estación Meteorológica",
+                                "CLARO" = "Open",
+                                "ROBLEDAL" = "Forest")) +
   geom_text(data = l, aes(x=time, y=value, label = variableF),
             vjust = 1.5, hjust = 0,
             fontface = "bold", 
             colour = "black")
 
+ggsave(plot = perfil_temp,
+       filename = here::here("figs/profile_temperatura.jpg"), 
+       height = 7, width = 4)
 ```
+
  
 
 
