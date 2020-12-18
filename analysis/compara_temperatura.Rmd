@@ -120,8 +120,6 @@ ptso <- tso %>% ggplot(aes(x=time, y = value, colour = location)) +
   theme_bw() +
   ylab("Temperatura del suelo")
 
-library(patchwork)
-pta/ptso
 ```
 
 ```{r}
@@ -143,11 +141,11 @@ dfno <- expand.grid(time = df10NA$time,
 
 v <- bind_rows(df10, dfno) %>% 
   mutate(variableF = case_when(
-    variable == "TemperaturaSueloSuperficieCubierto" ~ "Suelo Cubierto",
-    variable == "TemperaturaSueloSuperficieDespejado" ~ "Suelo Superficie",
-    variable == "TemperaturaSuelo30profundidad" ~ "Suelo z-30cm", 
-    variable == "TemperaturaAire_Estacion" ~ "Aire", 
-    variable == "TemperaturaAire45altura" ~ "Aire")) %>% 
+    variable == "TemperaturaSueloSuperficieCubierto" ~ "b) Bajo piedra / Hojarasca",
+    variable == "TemperaturaSueloSuperficieDespejado" ~ "c) Suelo superficie",
+    variable == "TemperaturaSuelo30profundidad" ~ "d) Suelo -30cm", 
+    variable == "TemperaturaAire_Estacion" ~ "a) Aire 45 cm", 
+    variable == "TemperaturaAire45altura" ~ "a) Aire 45 cm")) %>% 
   mutate(timeF = as.Date(time, format="%Y-%m-%d %H:%m:%s"))
 
 colores <- c("CLARO" = "#CC7722", "ROBLEDAL" = "#0B6623", "ESTACION" = "black")
@@ -180,8 +178,17 @@ perfil_temp <- v %>% ggplot(aes(x=time, y = value, colour = location)) +
             fontface = "bold", 
             colour = "black")
 
+perfil_temp
+```
+
+```{r}
 ggsave(plot = perfil_temp,
        filename = here::here("figs/profile_temperatura.jpg"), 
+       height = 7, width = 4)
+
+
+ggsave(plot = perfil_temp,
+       filename = here::here("figs/profile_temperatura.pdf"), 
        height = 7, width = 4)
 ```
 

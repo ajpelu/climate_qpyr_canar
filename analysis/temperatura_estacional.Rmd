@@ -58,10 +58,10 @@ s <- read_csv(here::here("data/raw/readings.csv")) %>%
 ```{r}
 d <- bind_rows(s, temp_psn) %>% 
   mutate(variableF = recode(variable, 
-    "TemperaturaAire45altura" = "Aire",
-    "TemperaturaAire_Estacion" = "Aire",
-    "TemperaturaSueloSuperficieCubierto" = "Suelo cubierto",
-    "TemperaturaSueloSuperficieDespejado" = "Superficie",
+    "TemperaturaAire45altura" = "Aire 45 cm",
+    "TemperaturaAire_Estacion" = "Aire 45 cm",
+    "TemperaturaSueloSuperficieCubierto" = "Bajo piedra / Hojarasca",
+    "TemperaturaSueloSuperficieDespejado" = "Suelo superficie",
     "TemperaturaSuelo30profundidad" = "Suelo -30 cm"))
 
 # Creamos limites de tiempo para filtrar los datos 
@@ -108,8 +108,8 @@ vi <- ggplot(dfcompara, aes(x = variableF, y = value, color=location)) +
         legend.title = element_blank(), 
         panel.grid = element_blank(), 
         strip.background = element_blank()) +
-  scale_x_discrete(limits = c("Aire", "Suelo cubierto",
-                                 "Superficie","Suelo -30 cm")) 
+  scale_x_discrete(limits = c("Aire 45 cm", "Bajo piedra / Hojarasca",
+                                 "Suelo superficie","Suelo -30 cm")) 
 
 # add labels 
 vi <- tag_facet(vi, 
@@ -121,13 +121,12 @@ vi
 
 
 ```{r}
-ggsave(plot = vi,
-       filename = here::here("figs/temperatura_ver_inv.jpg"), 
-       height = 5, width = 6)
+# ggsave(plot = vi,
+#        filename = here::here("figs/temperatura_ver_inv.jpg"), 
+#        height = 5, width = 6)
 ```
 
  
-
 # Promedio de las medias, mínimas, maximas y valor máximo/min de la serie 
 
 ```{r}
@@ -137,14 +136,46 @@ temp_diarias <- verano %>%
             tmin = min(value), 
             tmax = max(value)) 
 
+
 avg_temp_diarias <- temp_diarias %>% 
   group_by(variable, variableF, location) %>% 
   summarise(avg_tmean = mean(tmean),
             avg_tmin = mean(tmin), 
             avg_tmax = mean(tmax),
-            tmin = min(tmin),
-            tmax = max(tmax)) 
+            tmin_min = min(tmin),
+            tmax_max = max(tmax), 
+            tmaxq95 = quantile(tmax, 0.95),
+            tminq05 = quantile(tmin, .05)) 
   
+
+# Explora las máximas 
+
+temp_diarias %>% 
+  filter(variableF == "Superficie") %>% 
+ggplot(aes(tmax, fill=location)) + 
+  geom_histogram()
+
+# los datos de robledal tienen un pico en las maximas, pero
+
+temp_diarias %>% 
+  filter(variableF == "Superficie") %>% 
+ggplot(aes(tmax, fill=location, colour = location)) + 
+  geom_density(alpha=.1)
+
+p <- c(.05, 0.1, 0.8, 0.85, 0.9, 0.95, 0.99)
+p_names <- map_chr(p, ~paste0(.x*100, "%"))
+p_funs <- map(p, ~partial(quantile, probs = .x, na.rm = TRUE)) %>% 
+  set_names(nm = p_names)
+p_funs
+
+
+q <- temp_diarias %>% 
+  filter(variableF == "Superficie") %>% 
+  group_by(location) %>% 
+  summarize_at(vars(tmax), funs(!!!p_funs, max)) 
+
+
+
 pos <- position_dodge2(preserve = "single", width = 0.9)
 
 
@@ -154,7 +185,7 @@ po <- ggplot(avg_temp_diarias,
     aes(ymax = avg_tmax, ymin = avg_tmin, fill=location), 
     position = pos, size = 0.1) +
   geom_linerange(
-    aes(ymax = tmax, ymin = tmin), 
+    aes(ymax = tmaxq95, ymin = tminq05), 
     position = pos) + 
   geom_point(
     aes(y = avg_tmean),
@@ -173,11 +204,11 @@ po <- ggplot(avg_temp_diarias,
         panel.grid = element_blank(), 
         strip.background = element_blank()) +
   scale_x_discrete(limits = 
-                     c("Aire", "Suelo cubierto",
-                       "Superficie","Suelo -30 cm")) +
-  geom_text(aes(y= tmax, label=tmax), 
+                     c("Aire 45 cm", "Bajo piedra / Hojarasca",
+                       "Suelo superficie","Suelo -30 cm")) +
+  geom_text(aes(y= tmaxq95, label=round(tmaxq95,1)), 
                position = pos, vjust = -1, size = 3) +
-  geom_text(aes(y= tmin, label=tmin), 
+  geom_text(aes(y= tminq05, label=round(tminq05,1)), 
                position = pos, vjust = 1.5, size = 3) + 
   guides(colour=FALSE)
   
@@ -190,7 +221,6 @@ ggsave(plot = po,
        filename = here::here("figs/temperatura_verano.jpg"), 
        height = 5, width = 6)
 ```
-
 
 
 

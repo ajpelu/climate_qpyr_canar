@@ -200,12 +200,17 @@ p_profile <- ggplot(profile, aes(x=date, y = mean, colour = location, fill=locat
   xlab("") + 
   ylab("Contenido Volumétrico Agua (-30 cm) (%)")
 
+p_profile
+
+```
+
+```{r}
 ggsave(plot = p_profile,
        filename = here::here("figs/profile_humedad_verano.jpg"), 
        height = 5, width = 5)
+```
 
-
-
+```{r}
 profile1819 <- soil_pv_avg %>% 
   filter(lubridate::year(date) %in% c(2018:2019)) %>% 
   group_by(jday, location) %>% 
