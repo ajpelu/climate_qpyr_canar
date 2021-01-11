@@ -58,4 +58,21 @@ write_csv(temp_air, here::here("data/raw/psn07_temp_air.csv"))
 
 
 
+## Datos de 2020 nuevos 
+psn2020 <- read_delim(here::here("data/raw/2020_PSN07.txt"), delim = ",") %>% 
+  dplyr::select(TIMESTAMP, Precipitacion_Tot) %>% 
+  unique() %>% 
+  group_by(date = lubridate::floor_date(TIMESTAMP, "day")) %>% 
+  summarise(value = sum(Precipitacion_Tot)) %>% 
+  mutate(variable = "prec") %>% 
+  ungroup() 
+  
+write_csv(psn2020, here::here("data/raw/psn07_prec2020.csv"))
+
+
+
+  
+
+
+
  
