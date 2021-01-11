@@ -31,7 +31,7 @@ humedad <- d %>%
   dplyr::select(id_sensor, dat, time_dat, tag, positionsensor, tvariable) %>% 
   inner_join(sensors) %>% 
   dplyr::select(-tvariable, -elevation, -c(stationid:geo)) %>% 
-  rename(pos = positionsensor) %>% as.data.frame()
+  rename(pos = positionsensor) %>% as.data.frame() 
 
 ```
 
@@ -139,6 +139,7 @@ ggplot(soil, aes(x=date, y = daily_avg, colour = location)) +
 
 ```{r}
 soil_avg <- soil %>% 
+  filter(!(replica == "R1" & location == "CLARO")) %>% 
   group_by(date, location) %>% summarise(daily_avg = mean(daily_avg)) 
 ```
 
@@ -146,7 +147,8 @@ soil_avg <- soil %>%
 - Valores de primavera y verano 
 ```{r}
 soil_pv <- soil %>% 
-  filter(lubridate::month(date) %in% c(3:9)) %>%
+  filter(lubridate::month(date) %in% c(3:9)) %>% 
+  filter(!(replica == "R1" & location == "CLARO")) %>% 
   mutate(jday = lubridate::yday(date)) %>% as.data.frame()
 
 ggplot(soil_pv, aes(x=date, y = daily_avg, colour = location)) + 
@@ -160,11 +162,17 @@ ggplot(soil_pv, aes(x=date, y = daily_avg, colour = location)) +
 # Ojo ver que pasa los días 170 y 164 en CLARO
 # Parece que hay valores outliers en alguna replica 
 soil_pv %>% filter(location == "CLARO") %>% 
-  filter(jday %in% c(164, 170))
+  filter(jday %in% c(164, 170, 117))
 
 # Efectivamente valores anómalos en la R1 (en comparación con las otras réplicas). Los elimino 
 soil_pv_avg <- soil_pv %>% 
-  filter(!(location =="CLARO" & jday %in% c(164, 170) & replica == "R1")) %>% 
+  # filter(!(location =="CLARO" & replica =="R1" & lubridate::year(date) == "2020")) %>% 
+  group_by(date, jday, location) %>% summarise(daily_avg = mean(daily_avg)) 
+
+  
+  
+soil_pv_avg <- soil_pv %>%   
+  filter(!(location =="CLARO" & jday %in% c(164, 117, 170, 183, 181) & replica == "R1")) %>% 
            group_by(date, jday, location) %>% summarise(daily_avg = mean(daily_avg)) 
 
 
@@ -243,7 +251,14 @@ ggplot(profile1819, aes(x=date, y = mean, colour = location, fill=location)) +
 dfprec <- read_csv(here::here("data/raw/psn07_prec.csv")) %>% 
   mutate(date = as.Date(date, format = "%Y-%m-%d"))
 
-prec <- dfprec %>% filter(lubridate::year(date) %in% c(2018:2019)) 
+dfprec2020 <- read_csv(here::here("data/raw/psn07_prec2020.csv")) %>% 
+  mutate(date = as.Date(date, format = "%Y-%m-%d"))
+
+dfprec <- bind_rows(dfprec, dfprec2020)
+
+prec <- dfprec %>% 
+  filter(lubridate::year(date) %in% c(2018:2020)) %>%
+  filter(date < "2020-07-26")
 
 p <- ggplot(prec, aes(x=date, y = value)) + 
   # geom_density(stat = "identity", fill="blue", colour = "blue", 
@@ -261,11 +276,12 @@ p <- ggplot(prec, aes(x=date, y = value)) +
 ```
 
 
-
 - combinar 
 ```{r}
 s <- soil_avg %>% 
-  filter(lubridate::year(date) %in% c(2018:2019)) %>% 
+  filter(lubridate::year(date) %in% c(2018:2020)) %>% 
+  filter(!(location == "CLARO" & daily_avg > 41)) %>% 
+  filter(date != 	"2020-06-12") %>% 
   ggplot(aes(x=date, y = daily_avg, colour = location)) + 
   # geom_point(size=.5) + 
   scale_color_manual(values=colores,
@@ -288,7 +304,7 @@ plot_conjunto
 
 ```{r}
 ggsave(plot = plot_conjunto,
-       filename = here::here("figs/profile_humedad.jpg"),
+       filename = here::here("figs/profile_humedad2020.jpg"),
  height = 5, width = 6)
 ```
 

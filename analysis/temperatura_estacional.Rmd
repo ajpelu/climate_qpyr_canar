@@ -17,6 +17,9 @@ library("patchwork")
 library("scales")
 library("facetscales")
 library("egg")
+library("ggpubr") 
+library("patchwork")
+
 ```
 
 # Datos de la estacion 
@@ -342,11 +345,148 @@ vih <- vi + geom_hline(data = hh, aes(yintercept=avg_tmean), color = "gray")
 ggsave(plot = vih,
        filename = here::here("figs/temperatura_verano_invierno.jpg"), 
        height = 8, width = 6)
+
+pdf(file= here::here("figs/temperatura_verano_invierno.pdf"), 
+       height = 8, width = 6)
+vih
+dev.off()
+
+```
+
+
+### Analisis 
+
+- a1: avg, max, min entre estacion, open y forest del aire 
+
+```{r}
+my_comparisons <- list(
+  c("0_ESTACION", "CLARO"),
+  c("0_ESTACION", "ROBLEDAL"), 
+  c("ROBLEDAL", "CLARO"))
 ```
 
 
 
+```{r}
+td <- bind_rows(
+  (temp_diarias_i %>% mutate(season = "invierno")), 
+  (temp_diarias_v %>% mutate(season = "verano")))
+```
 
+#### Temperatura Aire: avg, max, min entre estacion, open y forest del aire  
+
+```{r}
+tairev <- temp_diarias_v %>% filter(variableF == "Aire 45 cm")
+tairei <- temp_diarias_i %>% filter(variableF == "Aire 45 cm")
+
+kw_taire_i <- 
+ggboxplot(tairei, x = "location", y = "tmean") + 
+  stat_compare_means(comparisons = my_comparisons) + 
+  stat_compare_means(label.y = 18) +
+  ggtitle("T Aire Invierno") + 
+  
+ggboxplot(tairei, x = "location", y = "tmin") + 
+  stat_compare_means(comparisons = my_comparisons) + 
+  stat_compare_means(label.y = 15) +
+
+ggboxplot(tairei, x = "location", y = "tmax") + 
+  stat_compare_means(comparisons = my_comparisons) + 
+  stat_compare_means(label.y = 35) 
+  
+
+kw_taire_v <- 
+ggboxplot(tairev, x = "location", y = "tmean") + 
+  stat_compare_means(comparisons = my_comparisons) + 
+  stat_compare_means(label.y = 30) +
+  ggtitle("T Aire Verano") + 
+
+ggboxplot(tairev, x = "location", y = "tmax") + 
+  stat_compare_means(comparisons = my_comparisons) + 
+  stat_compare_means(label.y = 50) +
+  
+ggboxplot(tairev, x = "location", y = "tmin") + 
+  stat_compare_means(comparisons = my_comparisons) + 
+  stat_compare_means(label.y = 25) 
+  
+kw_taire_v / kw_taire_i
+
+pdf(file= here::here("analysis/compara_means/taire.pdf"), 
+       height = 9, width = 9)
+kw_taire_v / kw_taire_i
+dev.off()
+
+```
+
+```{r}
+tcubiertav <- temp_diarias_v %>% filter(variableF == "Bajo piedra / Hojarasca")
+tcubiertai <- temp_diarias_i %>% filter(variableF == "Bajo piedra / Hojarasca")
+
+kw_tcubierta_i <- ggboxplot(tcubiertai, x = "location", y = "tmean") + stat_compare_means() + 
+  ggtitle("T Cubierta Invierno") + 
+ggboxplot(tcubiertai, x = "location", y = "tmin") + stat_compare_means() + 
+ggboxplot(tcubiertai, x = "location", y = "tmax") + stat_compare_means() 
+
+kw_tcubierta_v <- ggboxplot(tcubiertav, x = "location", y = "tmean") + stat_compare_means() + 
+  ggtitle("T Cubierta Verano") + 
+ggboxplot(tcubiertav, x = "location", y = "tmin") + stat_compare_means() + 
+ggboxplot(tcubiertav, x = "location", y = "tmax") + stat_compare_means() 
+
+kw_tcubierta_i / kw_tcubierta_v 
+
+pdf(file= here::here("analysis/compara_means/tcubierta.pdf"), 
+       height = 9, width = 9)
+kw_tcubierta_i / kw_tcubierta_v  
+dev.off()
+
+```
+
+```{r}
+tsuperfv <- temp_diarias_v %>% filter(variableF == "Suelo superficie")
+tsuperfi <- temp_diarias_i %>% filter(variableF == "Suelo superficie")
+
+kw_tsuperf_i <- 
+  ggboxplot(tsuperfi, x = "location", y = "tmean") + stat_compare_means() + 
+  ggtitle("T Superf Invierno") + 
+ggboxplot(tsuperfi, x = "location", y = "tmin") + stat_compare_means() + 
+ggboxplot(tsuperfi, x = "location", y = "tmax") + stat_compare_means() 
+
+kw_tsuperf_v <- 
+  ggboxplot(tsuperfv , x = "location", y = "tmean") + stat_compare_means() + 
+  ggtitle("T Superf Verano") + 
+ggboxplot(tsuperfv , x = "location", y = "tmin") + stat_compare_means() + 
+ggboxplot(tsuperfv , x = "location", y = "tmax") + stat_compare_means() 
+
+kw_tsuperf_i / kw_tsuperf_v  
+
+pdf(file= here::here("analysis/compara_means/tsuperf.pdf"), 
+       height = 9, width = 9)
+kw_tsuperf_i / kw_tsuperf_v 
+dev.off()
+```
+
+
+```{r}
+tsuelov <- temp_diarias_v %>% filter(variableF == "Suelo -30 cm")
+tsueloi <- temp_diarias_i %>% filter(variableF == "Suelo -30 cm")
+
+kw_tsuelo_i <- 
+  ggboxplot(tsueloi , x = "location", y = "tmean") + stat_compare_means() + 
+  ggtitle("T Suelo Invierno") + 
+ggboxplot(tsueloi, x = "location", y = "tmin") + stat_compare_means() + 
+ggboxplot(tsueloi, x = "location", y = "tmax") + stat_compare_means() 
+
+kw_tsuelo_v <- 
+  ggboxplot(tsuelov , x = "location", y = "tmean") + stat_compare_means() + 
+  ggtitle("T Suelo Verano") + 
+ggboxplot(tsuelov, x = "location", y = "tmin") + stat_compare_means() + 
+ggboxplot(tsuelov, x = "location", y = "tmax") + stat_compare_means() 
+
+kw_tsuelo <- kw_tsuelo_i / kw_tsuelo_i  
+pdf(file= here::here("analysis/compara_means/tsuelo.pdf"), 
+       height = 9, width = 9)
+kw_tsuelo
+dev.off()
+```
 
 
 
@@ -402,8 +542,6 @@ ggplot(verano_mmm,
   ylab("temp") +
   theme_bw()
 ```
-
-
 
 
 
