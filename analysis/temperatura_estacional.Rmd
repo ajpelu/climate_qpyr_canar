@@ -481,7 +481,7 @@ kw_tsuelo_v <-
 ggboxplot(tsuelov, x = "location", y = "tmin") + stat_compare_means() + 
 ggboxplot(tsuelov, x = "location", y = "tmax") + stat_compare_means() 
 
-kw_tsuelo <- kw_tsuelo_i / kw_tsuelo_i  
+kw_tsuelo <- kw_tsuelo_i / kw_tsuelo_v  
 pdf(file= here::here("analysis/compara_means/tsuelo.pdf"), 
        height = 9, width = 9)
 kw_tsuelo

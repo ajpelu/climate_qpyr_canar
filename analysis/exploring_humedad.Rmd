@@ -15,10 +15,234 @@ library("here")
 library("patchwork")
 ```
 
-# Prepare data 
+# Prepare data Humedad suelo 
+- Descargo los datos de db01 actualizados a 2021
+- Ya están filtrados los datos de 1750 
+
+```{r}
+humedad_raw <- read_csv(here::here("data/raw/humedad_suelo.csv")) %>% 
+  rename(date = time_dat) %>% 
+  dplyr::select(-id_sensor) %>% 
+  filter(date > as.POSIXct("2017-12-31")) %>% 
+  filter(date < as.POSIXct("2021-01-01")) %>% 
+  mutate(mes = lubridate::month(date))
+```
+
+## Filtro de calidad
+
+- Ver trabajos de Dorigo et al. 2011, 2013
+- Ver SoilMoisture301_qc
+
+Valores > 50 % no son creíbles, he consultado los datos de varios lugares de forests de la International Soil Moisture Network
+
+
+```{r}
+humedad_raw %>% 
+  ggplot(aes(dat)) + 
+  geom_histogram() + 
+  facet_grid(location~replica)
+```
+
+
+- Explorar evolución de los datos 
+
+```{r}
+humedad_raw %>% 
+  ggplot(aes(x=date, y=dat)) + geom_line()+
+  facet_grid(location~replica)
+```
+
+```{r}
+humedad_raw %>% 
+  filter(dat < 50) %>% 
+  ggplot(aes(x=date, y=dat)) + geom_point()+
+  facet_grid(location~replica)
+```
+
+- NOTAS:
+
+1) BOSQUE 
+- Eliminar valores < 5 % 
+
+2) CLARO 
+- Eliminar valores < 2 % 
+- No considerar año 2020 y R1
+
+
+```{r}
+humedad_raw %>% 
+  filter(dat < 50) %>% 
+  filter(dat > 2) %>%
+  filter(lubridate::month(date) %in% c(3:9)) %>% 
+  ggplot(aes(x=date, y=dat)) + geom_point()+
+  facet_grid(location~replica)
+```
+
+```{r}
+colores <- c("CLARO" = "#CC7722", "ROBLEDAL" = "#0B6623")
+```
+
+```{r}
+soil_d <- humedad_raw %>% 
+  filter(dat < 50) %>% 
+  filter(dat > 2) %>%
+  filter(lubridate::month(date) %in% c(3:9)) %>% 
+  filter(!(location == "CLARO" & replica == "R1" & date > as.POSIXct("2020-01-01"))) %>% 
+  filter(!(location == "CLARO" & replica == "R3" & date > as.POSIXct("2020-01-01"))) %>%
+  mutate(jday = lubridate::yday(date)) 
+
+
+soil_d_avg <- soil_d %>% 
+  group_by(jday, location) %>% 
+  summarise(mean = mean(dat), 
+            sd = sd(dat), 
+            se = sd/sqrt(length(dat)), 
+            n = length(dat)) %>% 
+  # ojo esta fecha es simplemente para visualizacion
+  mutate(date = as.Date("2018-01-01") + jday -1)
+
+  
+p_profile <- 
+  ggplot(soil_d_avg, aes(x=date, y = mean, colour = location, fill=location)) + 
+  # geom_point(size=.5) + 
+  geom_line() + 
+  geom_ribbon(aes(ymin=mean-se, ymax=mean+se), colour=NA, alpha =.4) + 
+   # geom_errorbar(aes(ymin=mean-se, ymax=mean+se))
+  scale_color_manual(values=colores, labels = c("Open","Forest")) +
+  scale_fill_manual(values=colores, labels = c("Open","Forest")) +  
+  theme_bw() + 
+  theme(legend.position = "bottom",
+        legend.title = element_blank(), 
+        panel.grid = element_blank()) +
+  scale_x_date(date_breaks = "1 month", date_labels = "%b") + 
+  xlab("") + 
+  ylab("Contenido Volumétrico Agua (-30 cm) (%)")
+
+```
+
+```{r}
+ggsave(plot = p_profile,
+       filename = here::here("figs/profile_humedad_verano.jpg"), 
+       height = 5, width = 5)
+```
+
+
+# Perfil precipitacion + suelo 
+
+```{r}
+dfprec <- read_csv(here::here("data/raw/psn07_prec.csv")) %>% 
+  mutate(date = as.Date(date, format = "%Y-%m-%d"))
+
+dfprec2020 <- read_csv(here::here("data/raw/psn07_prec2020.csv")) %>% 
+  mutate(date = as.Date(date, format = "%Y-%m-%d"))
+
+dfprec <- bind_rows(dfprec, dfprec2020)
+
+prec <- dfprec %>% 
+  filter(lubridate::year(date) %in% c(2018:2020)) 
+
+p <- ggplot(prec, aes(x=date, y = value)) + 
+  # geom_density(stat = "identity", fill="blue", colour = "blue", 
+  #              outline.type = "upper", 
+  #              size = .8) + 
+  geom_bar(stat = "identity", colour=NA, fill= "blue", width = 3) + 
+  theme_bw() + 
+  theme(
+    panel.grid.minor =element_blank(),
+    axis.title.y =  element_text(size = 8)
+  ) + 
+  ylab("Precipitación (mm)") + xlab("") +
+  scale_x_date(position = "top") 
+
+```
+
+
+```{r}
+
+sh <- humedad_raw %>% 
+  filter(!(location == "CLARO" & replica == "R1" & date > as.POSIXct("2020-01-01"))) %>% 
+  filter(!(location == "CLARO" & replica == "R3" & date > as.POSIXct("2020-01-01"))) %>% 
+  filter(dat < 50) %>% 
+  group_by(date = lubridate::floor_date(date, "day"),
+           location) %>% 
+  summarise(daily_avg = mean(dat)) 
+
+# Add NA a los días que no tenemos datos
+shc <- sh %>% group_by(location) %>% 
+  complete(location, date = seq.Date(min(as.Date(date)), max(as.Date(date)), by="day"))
+
+# shc %>% group_by(location, lubridate::floor_date(date, "year")) %>% count()
+
+s <- shc %>% 
+  filter(lubridate::year(date) %in% c(2018:2020)) %>% 
+  # filter(!(location == "CLARO" & daily_avg > 41)) %>% 
+  # filter(date != 	"2020-06-12") %>% 
+  ggplot(aes(x=date, y = daily_avg, colour = location)) + 
+  # geom_point(size=.5) + 
+  scale_color_manual(values=colores,
+                     labels = c("Open","Forest")) + 
+  geom_line() + 
+  theme_bw() +
+  theme(
+    panel.grid.minor =element_blank(), 
+    legend.position = "bottom", 
+    legend.title = element_blank(),
+    axis.title.y =  element_text(size = 8)
+  ) + 
+  ylab("Contenido Volumétrico Agua (%)") + xlab("")
+
+
+plot_conjunto <- p/s 
+plot_conjunto
+```
+
+
+```{r}
+ggsave(plot = plot_conjunto,
+       filename = here::here("figs/profile_humedad2020_filter.jpg"),
+ height = 5, width = 6)
+```
+
+
+
+
+
+--------------- 
+# OLD code
+
+
+
+```{r}
+library("strucchange")
+library("tsbox")
+
+
+claro_r1 <- humedad_raw %>% 
+  filter(replica == "R1" & location == "CLARO") %>% 
+  dplyr::select(date, dat) 
+
+
+claro_r1ts <- xts(claro_r1, order.by = claro_r1$date)
+
+claro_r1 %>% ggplot(aes(x=date, y=dat)) + geom_line()
+
+
+test2 <- Fstats(claro_r1ts$dat)
+
+
+```
+
+
+- R1 - CLARO 
+
+
+
+
+
 
 - remove sensores con status elevation = 0 
 - filter cota 1750 
+
 ```{r read_data}
 sensors <- read_csv(here::here("data/raw/sensors.csv")) %>% 
   filter(elevation == 1750)
