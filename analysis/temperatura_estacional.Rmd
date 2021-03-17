@@ -343,8 +343,18 @@ vih <- vi + geom_hline(data = hh, aes(yintercept=avg_tmean), color = "gray")
 
 ```{r}
 ggsave(plot = vih,
-       filename = here::here("figs/temperatura_verano_invierno.jpg"), 
-       height = 8, width = 6)
+       filename = here::here("figs/temperatura_verano_invierno.jpg"), width = 15, height = 20,
+       units = "cm",
+       device = "jpg",
+       dpi=400)
+
+
+ggsave(plot = perfil_temp,
+       filename = here::here("figs/profile_temperatura.jpg"), 
+       width = 9, units = "cm",
+       device = "jpg",
+       dpi=300)
+
 
 pdf(file= here::here("figs/temperatura_verano_invierno.pdf"), 
        height = 8, width = 6)
